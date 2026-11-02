@@ -1,6 +1,6 @@
-fastapi==0.115.5
-uvicorn[standard]==0.32.1
-requests==2.32.3
-apscheduler==3.10.4
-python-multipart==0.0.12
-tzdata==2024.2
+fastapi==0.162.0
+uvicorn==0.54.0
+requests==2.34.2
+apscheduler==3.11.3
+python-multipart==0.0.33
+tzdata==2026.6

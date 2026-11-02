@@ -7,7 +7,7 @@ from urllib.parse import urlparse
 
 import requests
 
-from . import db, longhu
+from . import db, longhu, security
 
 logger = logging.getLogger(__name__)
 
@@ -71,21 +71,27 @@ def notify(text: str):
     if not url:
         return
 
+    try:
+        url = security.validate_webhook_url(url)
+    except ValueError:
+        logger.warning("推送已跳过：地址不在服务器允许列表中")
+        return
+
     endpoint, payload = _build_notify(url, text)
     session = requests.Session()
     session.trust_env = False  # 忽略系统代理，避免被本机抓包工具拦住
     try:
-        resp = session.post(endpoint, json=payload, timeout=10)
+        resp = session.post(endpoint, json=payload, timeout=10, allow_redirects=False)
         try:
             data = resp.json()
         except ValueError:
             data = {}
         # Bark 用 code（成功为 200），企业微信/钉钉用 errcode（成功为 0）
         code = data.get("code", data.get("errcode", 0))
-        if resp.status_code >= 400 or code not in (0, 200):
-            logger.warning("webhook 推送返回异常: HTTP %s %s", resp.status_code, data)
+        if resp.status_code >= 300 or code not in (0, 200):
+            logger.warning("webhook 推送返回异常: HTTP %s", resp.status_code)
     except Exception as exc:  # 告警失败不影响主流程
-        logger.warning("webhook 推送失败: %s", exc)
+        logger.warning("webhook 推送失败: %s", type(exc).__name__)
     finally:
         session.close()
 

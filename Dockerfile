@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.11-slim-bookworm@sha256:94a8fee35252d06ab75856f15f12c7bae67b10e8a6da93c7fded82b2610926cd
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -11,12 +11,17 @@ ARG PIP_INDEX_URL=https://pypi.org/simple
 
 WORKDIR /app
 
-COPY requirements.txt ./
-RUN pip install -i ${PIP_INDEX_URL} -r requirements.txt
+COPY requirements.lock ./
+RUN pip install --require-hashes -i ${PIP_INDEX_URL} -r requirements.lock
 
 COPY app ./app
 
-RUN mkdir -p /data
+RUN groupadd --gid 10001 longhu \
+    && useradd --uid 10001 --gid 10001 --no-create-home longhu \
+    && mkdir -p /data \
+    && chown longhu:longhu /data \
+    && chmod 700 /data
+USER 10001:10001
 VOLUME ["/data"]
 
 EXPOSE 8000

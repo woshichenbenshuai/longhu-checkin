@@ -6,11 +6,11 @@ from contextlib import asynccontextmanager
 from datetime import date
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile, Request
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import db, longhu, parser, runner, scheduler
+from . import db, longhu, parser, runner, scheduler, security
 
 logging.basicConfig(
     level=logging.INFO,
@@ -24,14 +24,34 @@ STATIC_DIR = BASE_DIR / "static"
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    os.umask(0o077)
     db.init()
     scheduler.start()
     logger.info("服务已启动，签到窗口 %s", scheduler.window_text())
-    yield
+    try:
+        yield
+    finally:
+        scheduler.scheduler.shutdown(wait=False)
 
 
 app = FastAPI(title="龙湖签到", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+
+@app.middleware("http")
+async def browser_security(request: Request, call_next):
+    if request.method not in ("GET", "HEAD", "OPTIONS") and security.cross_origin_write(request.headers):
+        return JSONResponse({"detail": "不允许跨站修改设置或账号"}, status_code=403)
+    response = await call_next(request)
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
+        "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+    )
+    return response
 
 
 # --------------------------------------------------------------------------
@@ -217,7 +237,11 @@ def api_save_settings(
     except Exception:
         raise HTTPException(400, "时间格式应为 HH:MM") from None
 
-    values = {"checkin_time": checkin_time, "webhook_url": webhook_url.strip()}
+    try:
+        webhook_url = security.validate_webhook_url(webhook_url)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from None
+    values = {"checkin_time": checkin_time, "webhook_url": webhook_url}
     if checkin_jitter is not None and checkin_jitter.strip() != "":
         try:
             jitter = int(float(checkin_jitter))

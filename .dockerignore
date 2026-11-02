@@ -1,0 +1,7 @@
+**
+!requirements.txt
+!requirements.lock
+!app/
+!app/**
+app/**/__pycache__/
+app/**/*.pyc

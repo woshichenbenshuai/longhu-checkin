@@ -1,0 +1,34 @@
+# Requires the existing authenticated Nginx gateway on the Docker host.
+services:
+  longhu:
+    build:
+      context: .
+      args:
+        PIP_INDEX_URL: https://pypi.org/simple
+    image: longhu-checkin:${IMAGE_TAG:-home}
+    container_name: longhu-checkin
+    restart: unless-stopped
+    init: true
+    ports:
+      - "127.0.0.1:8088:8000"
+    volumes:
+      - ./data:/data
+    environment:
+      TZ: Asia/Shanghai
+      DATA_DIR: /data
+      WEBHOOK_ALLOWED_HOSTS: ${WEBHOOK_ALLOWED_HOSTS:-api.day.app,qyapi.weixin.qq.com,oapi.dingtalk.com}
+    mem_limit: 256m
+    cpus: 0.5
+    pids_limit: 64
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777,noexec,nosuid,nodev
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: 5m
+        max-file: "3"

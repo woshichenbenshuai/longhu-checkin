@@ -56,7 +56,7 @@ def _decode(resp: requests.Response) -> dict:
         return json.loads(base64.b64decode(text).decode("utf-8"))
     except Exception:
         pass
-    return {"code": "parse_error", "message": text[:200]}
+    return {"code": "parse_error", "message": "接口返回了无法解析的数据"}
 
 
 def _request(method: str, url: str, headers: dict, body: dict | None = None,
@@ -66,11 +66,13 @@ def _request(method: str, url: str, headers: dict, body: dict | None = None,
     clean = {k: v for k, v in headers.items() if v not in (None, "")}
     try:
         if method.upper() == "GET":
-            resp = session.get(url, headers=clean, timeout=timeout)
+            resp = session.get(url, headers=clean, timeout=timeout, allow_redirects=False)
         else:
-            resp = session.post(url, headers=clean, json=body, timeout=timeout)
+            resp = session.post(url, headers=clean, json=body, timeout=timeout, allow_redirects=False)
+        if 300 <= resp.status_code < 400:
+            raise LonghuError("龙湖接口返回了非预期重定向，已停止发送凭据")
     except requests.RequestException as exc:
-        raise LonghuError(f"网络请求失败: {exc}") from exc
+        raise LonghuError(f"网络请求失败: {type(exc).__name__}") from exc
     finally:
         session.close()
     return _decode(resp)
