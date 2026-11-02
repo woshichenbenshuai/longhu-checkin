@@ -16,7 +16,7 @@ Compose 文件合并。它将端口绑定到 `127.0.0.1:8088`，只允许服务�
 ```sh
 git clone --branch codex/home-deployment https://github.com/woshichenbenshuai/longhu-checkin.git /opt/stacks/longhu-checkin
 cd /opt/stacks/longhu-checkin
-install -d -m 0700 -o 10001 -g 10001 data
+install -d -m 0700 -o 10001 -g 10001 data secrets
 printf 'IMAGE_TAG=home-%s\n' "$(git rev-parse --short HEAD)" > .env
 chmod 600 .env
 docker compose -f compose.home.yaml config --quiet
@@ -58,6 +58,29 @@ Cloudflare Tunnel 新增该 hostname，service 为 `http://127.0.0.1:18080`；
 - 初始不导入账号、推送地址为空，部署检查不会触发真实签到或手机通知。
 
 ## 通知与凭据
+
+Telegram 沿用家里 Rewards 的机器人和接收目标，直接访问 Telegram Bot API。
+配置仅保存在服务器的 `secrets/telegram.json`，目录权限 `0700`、文件权限
+`0600`，归 UID/GID `10001:10001` 所有，只读挂载到容器；不写入 Git、镜像、
+数据库或面板 API。文件结构如下（示例值不是有效凭据）：
+
+```json
+{"enabled": true, "bot_token": "填已有机器人 Token", "chat_id": "填已有接收 ID"}
+```
+
+每轮自动签到或面板“立即签到”结束后发一条结果，包含账号、签到状态、成长值
+变化、等级、珑珠、续期结果和剩余天数。“今日已签到”、续期失败、资料刷新
+失败及调度异常均会提醒。多账号较长时自动分段；未配置或停用时静默跳过。
+API 仅返回推送是否配置、是否启用，页面设置中可以查看该状态。
+
+测试命令只发送明确标记的测试通知，不执行签到：
+
+```sh
+docker compose -f compose.home.yaml exec -T longhu python -m app.telegram --test
+```
+
+消息发送失败不会影响签到，不自动重试可能已经送达的消息，避免重复推送。
+服务器凭据轮换后同样更新此文件。更新应用和重建镜像不会覆盖 `secrets`。
 
 默认仅允许 HTTPS 的 `api.day.app`、`qyapi.weixin.qq.com` 和
 `oapi.dingtalk.com`。自建 Bark 需要运维人员通过 `.env` 中

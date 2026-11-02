@@ -98,8 +98,9 @@ def _job():
         results = runner.run_all()
         runner.daily_summary(results)
         logger.info("定时任务完成，共 %d 个账号", len(results))
-    except Exception:
+    except Exception as exc:
         logger.exception("定时任务执行失败")
+        runner.notify(f"【龙湖签到】定时任务执行异常：{type(exc).__name__}，请检查面板日志。")
     finally:
         try:
             db.save_settings({"last_run_date": _today_text()})

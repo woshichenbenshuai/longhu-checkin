@@ -4,10 +4,11 @@ import logging
 import math
 from datetime import datetime, timezone
 from urllib.parse import urlparse
+from zoneinfo import ZoneInfo
 
 import requests
 
-from . import db, longhu, security
+from . import db, longhu, security, telegram
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +67,13 @@ def _build_notify(url: str, text: str) -> tuple[str, dict]:
 
 
 def notify(text: str):
-    """发告警（Bark / 企业微信 / 钉钉）。没配 webhook 就静默跳过。"""
+    """向已配置的 Telegram 和可选 Webhook 发送通知。"""
+    text = telegram.redact(text)
+    telegram.send_message(text)
+    _notify_webhook(text)
+
+
+def _notify_webhook(text: str):
     url = (db.get_settings().get("webhook_url") or "").strip()
     if not url:
         return
@@ -108,6 +115,7 @@ def run_account(account: dict, do_checkin: bool = True) -> dict:
         "checkin_message": "",
         "profile": {},
         "error": "",
+        "growth_before": account.get("growth_value", 0),
     }
 
     # ---- 1. 续期 ----
@@ -138,13 +146,6 @@ def run_account(account: dict, do_checkin: bool = True) -> dict:
         result["checkin_message"] = message
         db.add_log(acc_id, acc_name, "checkin", status, message)
         db.update_account(acc_id, last_status=status, last_message=message)
-
-        if not ok and status == "fail":
-            notify(
-                f"【龙湖签到】{acc_name} 失败\n"
-                f"续期: {payload}\n签到: {message}\n"
-                f"该账号需要重新导入凭据。"
-            )
 
     # ---- 3. 刷新资料 ----
     try:
@@ -184,18 +185,42 @@ def run_all(do_checkin: bool = True) -> list[dict]:
     return results
 
 
-def daily_summary(results: list[dict]):
-    """每日汇总推送：有失败才提醒，全成功则发一条简报。"""
+def daily_summary(results: list[dict], source: str = "每日自动"):
+    """每轮只发一次完整结果，已签、续期或资料异常同样会通知。"""
     if not results:
         return
-    failed = [r for r in results if r.get("checkin_status") == "fail"]
-    ok = [r for r in results if r.get("checkin_status") == "ok"]
-    already = [r for r in results if r.get("checkin_status") == "already"]
-
-    if failed:
-        lines = [f"【龙湖签到】{len(failed)} 个账号异常"]
-        for item in failed:
-            lines.append(f"· {item['name']}: {item.get('checkin_message') or item.get('error')}")
-        notify("\n".join(lines))
-    elif ok:
-        notify(f"【龙湖签到】成功 {len(ok)} 个，已签 {len(already)} 个")
+    now = datetime.now(ZoneInfo("Asia/Shanghai")).strftime("%Y-%m-%d %H:%M:%S")
+    ok = sum(r.get("checkin_status") == "ok" for r in results)
+    already = sum(r.get("checkin_status") == "already" for r in results)
+    failed = sum(r.get("checkin_status") == "fail" for r in results)
+    issues = sum(bool(r.get("error")) or r.get("checkin_status") == "fail" for r in results)
+    lines = [
+        f"【龙湖签到｜{source}】", "来源：家里 common",
+        f"时间：{now}（北京时间）",
+        f"签到：成功 {ok}｜已签 {already}｜失败 {failed}",
+        f"异常账号：{issues}",
+    ]
+    labels = {"ok": "签到成功", "already": "今日已签到", "fail": "签到失败", "skipped": "未执行签到"}
+    for result in results:
+        profile = result.get("profile") or {}
+        lines.extend(["", f"账号：{str(result.get('name') or '龙湖账号')[:80]}",
+                      f"状态：{labels.get(result.get('checkin_status'), '执行异常')}"])
+        if result.get("checkin_message"):
+            lines.append(str(result["checkin_message"])[:250])
+        if "growth_value" in profile:
+            current = profile["growth_value"]
+            before = result.get("growth_before")
+            if before is not None:
+                lines.append(f"成长值：{before} → {current}（{current - before:+g}）")
+            else:
+                lines.append(f"成长值：{current}")
+        if profile.get("level_name"):
+            lines.append(f"等级：{profile['level_name']}")
+        if "balance" in profile:
+            lines.append(f"珑珠余额：{profile['balance']:g}")
+        lines.append("凭据续期：" + ("成功" if result.get("refreshed") else "失败"))
+        if result.get("days_left") is not None:
+            lines.append(f"凭据剩余：{result['days_left']} 天")
+        if result.get("error"):
+            lines.append("异常：" + str(result["error"])[:250])
+    notify("\n".join(lines))

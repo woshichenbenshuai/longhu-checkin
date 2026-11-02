@@ -10,7 +10,7 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import db, longhu, parser, runner, scheduler, security
+from . import db, longhu, parser, runner, scheduler, security, telegram
 
 logging.basicConfig(
     level=logging.INFO,
@@ -166,7 +166,13 @@ def api_run(account_id: int):
     account = db.get_account(account_id)
     if not account:
         raise HTTPException(404, "账号不存在")
-    result = runner.run_account(account, do_checkin=True)
+    try:
+        result = runner.run_account(account, do_checkin=True)
+    except Exception as exc:
+        logger.exception("手动执行失败")
+        runner.notify(f"【龙湖签到】账号 {account_id} 手动执行异常：{type(exc).__name__}，请检查面板日志。")
+        raise HTTPException(500, "执行异常，请检查面板日志") from None
+    runner.daily_summary([result], source="手动执行")
     return result
 
 
@@ -221,6 +227,7 @@ def api_get_settings():
         "checkin_jitter": data.get("checkin_jitter", "60"),
         "window": scheduler.window_text(),
         "webhook_url": data.get("webhook_url", ""),
+        "telegram": telegram.status(),
         "next_run": scheduler.next_run_text(),
     }
 

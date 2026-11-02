@@ -214,6 +214,10 @@
     </div>
     <div class="tips" id="setWindowTip">实际执行时间 = 起点 + 0～N 分钟内的随机值，每天都不同，避免固定时刻被风控识别。默认起点 08:00、浮动 60 分钟，即每天落在 08:00–09:00 之间。</div>
     <div class="field">
+      <label>Telegram 推送</label>
+      <div class="tips" id="telegramStatus">正在读取推送状态…</div>
+    </div>
+    <div class="field">
       <label>告警推送地址（Bark / 企业微信 / 钉钉，可留空）</label>
       <input type="text" id="setWebhook" placeholder="https://api.day.app/你的DeviceKey">
     </div>
@@ -456,6 +460,9 @@ $("btnSettings").onclick = async () => {
     $("setTime").value = s.checkin_time || "08:00";
     $("setJitter").value = s.checkin_jitter ?? "60";
     $("setWebhook").value = s.webhook_url || "";
+    $("telegramStatus").textContent = s.telegram?.enabled
+      ? "已启用。自动签到和手动签到结束后发送完整结果，失败或续期异常也会提醒。"
+      : s.telegram?.configured ? "已配置，目前停用。" : "尚未启用。";
     updateWindowTip();
     $("modalSettings").classList.add("show");
   } catch (e) {
