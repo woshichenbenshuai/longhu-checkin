@@ -1,5 +1,9 @@
 # 龙湖天街自动签到
 
+> **家用 common VM 部署**：使用 [家用部署说明](docs/home-deployment.md) 和
+> `docker compose -f compose.home.yaml`，通过现有 TOTP 网关访问。
+> 部署分支为 `codex/home-deployment`，支持 `git pull --ff-only` 更新。
+
 一个自带 Web 看板的龙湖会员每日签到服务。**导入一次凭据，之后全自动**——token 会在每次执行时自动续期，不用反复抓包，也不依赖青龙面板。
 
 ![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)
@@ -63,6 +67,8 @@
 git clone https://github.com/ken861222/longhu-checkin.git
 cd longhu-checkin
 
+# 容器以 UID 10001 运行，先准备持久化目录（已有数据时仅调整权限）
+sudo install -d -m 0700 -o 10001 -g 10001 data
 docker compose up -d --build
 ```
 
@@ -75,6 +81,7 @@ docker compose up -d --build
 ```bash
 docker build -t longhu-checkin .
 
+sudo install -d -m 0700 -o 10001 -g 10001 data
 docker run -d --name longhu-checkin \
   --restart unless-stopped \
   -p 8088:8000 \
