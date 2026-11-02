@@ -18,6 +18,7 @@ COPY app ./app
 
 RUN groupadd --gid 10001 longhu \
     && useradd --uid 10001 --gid 10001 --no-create-home longhu \
+    && chmod -R u=rwX,go=rX /app/app \
     && mkdir -p /data \
     && chown longhu:longhu /data \
     && chmod 700 /data
