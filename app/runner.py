@@ -206,7 +206,7 @@ def daily_summary(results: list[dict], source: str = "每日自动"):
         lines.extend(["", f"账号：{str(result.get('name') or '龙湖账号')[:80]}",
                       f"状态：{labels.get(result.get('checkin_status'), '执行异常')}"])
         if result.get("checkin_message"):
-            lines.append(str(result["checkin_message"])[:250])
+            lines.append(telegram.redact(str(result["checkin_message"]))[:250])
         if "growth_value" in profile:
             current = profile["growth_value"]
             before = result.get("growth_before")
@@ -222,5 +222,5 @@ def daily_summary(results: list[dict], source: str = "每日自动"):
         if result.get("days_left") is not None:
             lines.append(f"凭据剩余：{result['days_left']} 天")
         if result.get("error"):
-            lines.append("异常：" + str(result["error"])[:250])
+            lines.append("异常：" + telegram.redact(str(result["error"]))[:250])
     notify("\n".join(lines))

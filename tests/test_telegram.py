@@ -164,9 +164,15 @@ class SummaryTests(unittest.TestCase):
 
     def test_known_token_forms_are_redacted(self):
         jwt = "eyJhbGciOiJIUzI1NiJ9.eyJ1c2VyIjoiMSJ9.signature-value"
-        text = telegram.redact("test " + FAKE_TOKEN + " " + "a" * 32 + " " + jwt)
         for secret in (FAKE_TOKEN, "a" * 32, jwt):
-            self.assertNotIn(secret, text)
+            for text in (f"test {secret} value", f"凭据{secret}已失效"):
+                self.assertNotIn(secret, telegram.redact(text))
+
+    def test_sensitive_error_is_redacted_before_summary_truncation(self):
+        secret = "a" * 32
+        result = self.result(error="错误" * 120 + secret, checkin_message="提示" * 120 + secret)
+        text = self.summary([result])
+        self.assertNotIn("a" * 10, text)
 
     def test_run_account_does_not_duplicate_failure_notification(self):
         account = {"id": 1, "name": "测试账号", "token": "test", "growth_value": 5}
